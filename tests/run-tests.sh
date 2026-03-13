@@ -262,6 +262,11 @@ run_test         "empty-package-json"    "unknown"    ""           "unknown" "in
 run_test         "flutter-no-version"    "flutter"    ""           "pub"    "flutter (no lib/)"
 
 echo ""
+echo "  ── Regression ────────────────────────────────"
+
+run_test         "guardrails-not-rails"  "react"      "18.2.0"     "npm"    "guardrails!=rails"
+
+echo ""
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Results: $PASS_COUNT/$TOTAL passed"
 
