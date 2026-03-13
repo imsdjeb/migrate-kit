@@ -265,6 +265,7 @@ echo ""
 echo "  ── Regression ────────────────────────────────"
 
 run_test         "guardrails-not-rails"  "react"      "18.2.0"     "npm"    "guardrails!=rails"
+run_test_no_version "flask-not-django"  "unknown"    "unknown"             "flask manage.py!=django"
 
 echo ""
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

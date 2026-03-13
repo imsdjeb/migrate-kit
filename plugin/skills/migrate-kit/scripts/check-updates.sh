@@ -130,10 +130,11 @@ version_gt() {
 }
 
 # Fetch latest version from npm registry. Returns empty string on failure.
+# Uses a 15-second timeout to avoid hanging on unreachable/private registries.
 npm_latest() {
   local pkg="$1"
   if [ "$HAS_NPM" = true ]; then
-    npm view "$pkg" version 2>/dev/null || true
+    npm view "$pkg" version --fetch-timeout=15000 2>/dev/null || true
   fi
 }
 
@@ -150,7 +151,7 @@ fetch_flutter_latest() {
 
   if [ "$HAS_CURL" = true ] && [ "$HAS_JQ" = true ]; then
     local ver
-    ver=$(curl -sf "$flutter_releases_url" \
+    ver=$(curl -sf --connect-timeout 5 --max-time 10 "$flutter_releases_url" \
       | jq -r '[.releases[] | select(.channel == "stable")] | .[0].version' 2>/dev/null || true)
     if [ -n "$ver" ]; then
       echo "$ver"
@@ -158,7 +159,7 @@ fetch_flutter_latest() {
     fi
   elif [ "$HAS_CURL" = true ]; then
     local ver
-    ver=$(curl -sf "$flutter_releases_url" \
+    ver=$(curl -sf --connect-timeout 5 --max-time 10 "$flutter_releases_url" \
       | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -186,7 +187,7 @@ fetch_django_latest() {
   # Primary: PyPI JSON API (most reliable — always returns the actual latest)
   if [ "$HAS_CURL" = true ] && [ "$HAS_JQ" = true ]; then
     local ver
-    ver=$(curl -sf "https://pypi.org/pypi/django/json" \
+    ver=$(curl -sf --connect-timeout 5 --max-time 10 "https://pypi.org/pypi/django/json" \
       | jq -r '.info.version' 2>/dev/null || true)
     if [ -n "$ver" ]; then
       echo "$ver"
@@ -194,7 +195,7 @@ fetch_django_latest() {
     fi
   elif [ "$HAS_CURL" = true ]; then
     local ver
-    ver=$(curl -sf "https://pypi.org/pypi/django/json" \
+    ver=$(curl -sf --connect-timeout 5 --max-time 10 "https://pypi.org/pypi/django/json" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || true)
     if [ -n "$ver" ]; then
       echo "$ver"

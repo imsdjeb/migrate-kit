@@ -185,7 +185,8 @@ elif [ -f "pubspec.yaml" ]; then
     '{flutter: $flutter, dart: $dart}')
 
 # --- Django (not JSON — uses grep) ---
-elif [ -f "manage.py" ]; then
+# Verify manage.py is actually Django (Flask-Script also creates manage.py)
+elif [ -f "manage.py" ] && grep -qE "DJANGO_SETTINGS_MODULE|django" manage.py 2>/dev/null; then
   FRAMEWORK="django"
   if [ -f "requirements.txt" ]; then
     CURRENT_VERSION=$(grep -iE '^django[=>~]' requirements.txt 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
