@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify jq is installed
+        run: jq --version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+        continue-on-error: true
+
+      - name: Make all shell scripts executable
+        run: find . -name "*.sh" -exec chmod +x {} \;
+
+      - name: Run tests
+        run: ./tests/run-tests.sh
+
+  check-freshness:
+    name: Check Reference Freshness
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify jq is installed
+        run: jq --version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+        continue-on-error: true
+
+      - name: Make all shell scripts executable
+        run: find . -name "*.sh" -exec chmod +x {} \;
+
+      - name: Check for outdated references
+        run: |
+          output=$(./plugin/skills/migrate-kit/scripts/check-updates.sh 2>&1) || true
+          echo "$output"
+          if echo "$output" | grep -qi "outdated\|update\|newer"; then
+            echo "::warning::Some references may be outdated. Review the output above."
+          fi
+
+  validate-json:
+    name: Validate JSON
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify jq is installed
+        run: jq --version
+
+      - name: Validate all JSON files
+        run: find . -name "*.json" -not -path "./.git/*" -exec jq empty {} \;
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+        continue-on-error: true
+
+      - name: Make detect-stack.sh executable
+        run: chmod +x ./plugin/skills/migrate-kit/scripts/detect-stack.sh
+
+      - name: Validate detect-stack.sh outputs valid JSON
+        run: |
+          tmpdir=$(mktemp -d)
+          output=$(cd "$tmpdir" && "$GITHUB_WORKSPACE/plugin/skills/migrate-kit/scripts/detect-stack.sh" 2>/dev/null)
+          echo "$output" | jq empty
+          rm -rf "$tmpdir"

@@ -4,6 +4,12 @@ set -euo pipefail
 # migrate-kit stack detection script
 # Detects framework, version, related deps, and project metadata
 
+# --- Require jq ---
+if ! command -v jq &>/dev/null; then
+  echo "Error: jq is required but not installed. Install it with: brew install jq (macOS) or apt-get install jq (Debian/Ubuntu)" >&2
+  exit 1
+fi
+
 FRAMEWORK="unknown"
 CURRENT_VERSION=""
 RELATED_DEPS="{}"
@@ -43,26 +49,52 @@ elif [ -f "Cargo.lock" ]; then
   PACKAGE_MANAGER="cargo"
 fi
 
-# --- Helper: extract version from package.json ---
-get_pkg_version() {
-  local pkg="$1"
-  if [ -f "package.json" ]; then
-    grep "\"$pkg\"" package.json 2>/dev/null | head -1 | sed -E 's/.*"[^"]*"[[:space:]]*:[[:space:]]*"[\^~]?([0-9][^"]*)".*$/\1/'
+# --- Cache parsed package.json ---
+PKG_JSON=""
+PKG_JSON_VALID="false"
+if [ -f "package.json" ]; then
+  PKG_JSON=$(cat package.json 2>/dev/null || echo "")
+  if echo "$PKG_JSON" | jq empty 2>/dev/null; then
+    PKG_JSON_VALID="true"
   fi
+fi
+
+# --- Helper: check if a dependency exists in package.json ---
+pkg_has_dep() {
+  local pkg="$1"
+  [ "$PKG_JSON_VALID" = "true" ] || return 1
+  echo "$PKG_JSON" | jq -e --arg p "$pkg" '
+    (.dependencies[$p] // .devDependencies[$p] // .peerDependencies[$p]) != null
+  ' &>/dev/null
 }
 
-# --- Helper: build related deps JSON ---
+# --- Helper: extract version from package.json, stripping range prefixes ---
+get_pkg_version() {
+  local pkg="$1"
+  [ "$PKG_JSON_VALID" = "true" ] || return 0
+  local raw
+  raw=$(echo "$PKG_JSON" | jq -r --arg p "$pkg" '
+    (.dependencies[$p] // .devDependencies[$p] // .peerDependencies[$p]) // empty
+  ' 2>/dev/null) || return 0
+  # Strip version range prefixes: ^, ~, >=, >, <=, <, =
+  echo "$raw" | sed -E 's/^[~^><=]+//'
+}
+
+# --- Helper: build related deps JSON from package.json ---
 build_deps_json() {
-  local deps=""
-  for pkg in "$@"; do
-    local ver
-    ver=$(get_pkg_version "$pkg")
-    if [ -n "$ver" ]; then
-      [ -n "$deps" ] && deps="$deps, "
-      deps="$deps\"$pkg\": \"$ver\""
-    fi
-  done
-  echo "{$deps}"
+  [ "$PKG_JSON_VALID" = "true" ] || { echo "{}"; return; }
+
+  # Build a JSON array of requested package names
+  local pkg_array
+  pkg_array=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
+
+  echo "$PKG_JSON" | jq -c --argjson pkgs "$pkg_array" '
+    def strip_prefix: sub("^[~^><=]+"; "");
+    [.dependencies, .devDependencies, .peerDependencies]
+    | map(select(. != null)) | add // {}
+    | . as $all
+    | reduce $pkgs[] as $p ({}; if $all[$p] then . + {($p): ($all[$p] | strip_prefix)} else . end)
+  ' 2>/dev/null || echo "{}"
 }
 
 # --- Detect CI ---
@@ -73,74 +105,74 @@ fi
 # --- Detect tests ---
 if [ -f "jest.config.js" ] || [ -f "jest.config.ts" ] || [ -f "vitest.config.ts" ] || [ -f "karma.conf.js" ] || [ -f "cypress.config.js" ] || [ -f "cypress.config.ts" ] || [ -f "playwright.config.ts" ] || [ -f "pytest.ini" ] || [ -f "setup.py" ] || [ -f "phpunit.xml" ]; then
   HAS_TESTS="true"
-elif [ -f "package.json" ] && grep -q '"test"' package.json 2>/dev/null; then
+elif [ "$PKG_JSON_VALID" = "true" ] && echo "$PKG_JSON" | jq -e '.scripts.test != null' &>/dev/null; then
   HAS_TESTS="true"
 elif [ -f "pubspec.yaml" ] && [ -d "test" ]; then
   HAS_TESTS="true"
 fi
 
 # --- Count project files ---
-if [ -f "package.json" ]; then
-  PROJECT_SIZE_FILES=$(find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.vue" -o -name "*.svelte" 2>/dev/null | grep -v node_modules | grep -v '.next' | grep -v dist | wc -l | tr -d ' ')
-  PROJECT_SIZE_COMPONENTS=$(find . -name "*.component.ts" -o -name "*.tsx" -o -name "*.vue" -o -name "*.svelte" 2>/dev/null | grep -v node_modules | grep -v '.next' | grep -v dist | grep -v '.test.' | grep -v '.spec.' | grep -v '.stories.' | wc -l | tr -d ' ')
-  PROJECT_SIZE_SERVICES=$(find . -name "*.service.ts" -o -name "*.service.js" 2>/dev/null | grep -v node_modules | wc -l | tr -d ' ')
+if [ "$PKG_JSON_VALID" = "true" ]; then
+  PROJECT_SIZE_FILES=$(find . \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.vue" -o -name "*.svelte" \) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/dist/*" 2>/dev/null | wc -l | tr -d ' ')
+  PROJECT_SIZE_COMPONENTS=$(find . \( -name "*.component.ts" -o -name "*.tsx" -o -name "*.vue" -o -name "*.svelte" \) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/dist/*" -not -name "*.test.*" -not -name "*.spec.*" -not -name "*.stories.*" 2>/dev/null | wc -l | tr -d ' ')
+  PROJECT_SIZE_SERVICES=$(find . \( -name "*.service.ts" -o -name "*.service.js" \) -not -path "*/node_modules/*" 2>/dev/null | wc -l | tr -d ' ')
 elif [ -f "pubspec.yaml" ]; then
   PROJECT_SIZE_FILES=$(find lib -name "*.dart" 2>/dev/null | wc -l | tr -d ' ')
-  PROJECT_SIZE_COMPONENTS=$(find lib -name "*.dart" 2>/dev/null | grep -v '_test.dart' | wc -l | tr -d ' ')
+  PROJECT_SIZE_COMPONENTS=$(find lib -name "*.dart" -not -name "*_test.dart" 2>/dev/null | wc -l | tr -d ' ')
 elif [ -f "manage.py" ]; then
-  PROJECT_SIZE_FILES=$(find . -name "*.py" 2>/dev/null | grep -v venv | grep -v __pycache__ | wc -l | tr -d ' ')
+  PROJECT_SIZE_FILES=$(find . -name "*.py" -not -path "*/venv/*" -not -path "*/__pycache__/*" 2>/dev/null | wc -l | tr -d ' ')
 elif [ -f "Gemfile" ]; then
-  PROJECT_SIZE_FILES=$(find . -name "*.rb" -o -name "*.erb" 2>/dev/null | grep -v vendor | wc -l | tr -d ' ')
+  PROJECT_SIZE_FILES=$(find . \( -name "*.rb" -o -name "*.erb" \) -not -path "*/vendor/*" 2>/dev/null | wc -l | tr -d ' ')
 fi
 
 # ===== Framework Detection (order matters: most specific first) =====
 
 # --- Angular ---
-if [ -f "package.json" ] && grep -q "@angular/core" package.json 2>/dev/null; then
+if pkg_has_dep "@angular/core"; then
   FRAMEWORK="angular"
   CURRENT_VERSION=$(get_pkg_version "@angular/core")
   RELATED_DEPS=$(build_deps_json "@angular/core" "@angular/cli" "@angular/common" "@angular/router" "@angular/forms" "@angular/platform-browser" "rxjs" "typescript" "zone.js" "@ngrx/store" "@ngrx/effects")
 
 # --- Next.js ---
-elif [ -f "package.json" ] && grep -q "\"next\"" package.json 2>/dev/null; then
+elif pkg_has_dep "next"; then
   FRAMEWORK="nextjs"
   CURRENT_VERSION=$(get_pkg_version "next")
   RELATED_DEPS=$(build_deps_json "next" "react" "react-dom" "typescript" "next-auth" "next-intl" "@next/font" "@next/image")
 
 # --- Nuxt ---
-elif [ -f "package.json" ] && grep -q "\"nuxt\"" package.json 2>/dev/null; then
+elif pkg_has_dep "nuxt"; then
   FRAMEWORK="nuxt"
   CURRENT_VERSION=$(get_pkg_version "nuxt")
   RELATED_DEPS=$(build_deps_json "nuxt" "vue" "@nuxtjs/i18n" "@pinia/nuxt" "typescript")
 
 # --- SvelteKit ---
-elif [ -f "package.json" ] && grep -q "@sveltejs/kit" package.json 2>/dev/null; then
+elif pkg_has_dep "@sveltejs/kit"; then
   FRAMEWORK="sveltekit"
   CURRENT_VERSION=$(get_pkg_version "@sveltejs/kit")
   RELATED_DEPS=$(build_deps_json "@sveltejs/kit" "svelte" "@sveltejs/adapter-auto" "vite" "typescript")
 
 # --- NestJS ---
-elif [ -f "package.json" ] && grep -q "@nestjs/core" package.json 2>/dev/null; then
+elif pkg_has_dep "@nestjs/core"; then
   FRAMEWORK="nestjs"
   CURRENT_VERSION=$(get_pkg_version "@nestjs/core")
   RELATED_DEPS=$(build_deps_json "@nestjs/core" "@nestjs/common" "@nestjs/platform-express" "rxjs" "typescript")
 
 # --- Vue ---
-elif [ -f "package.json" ] && grep -q "\"vue\"" package.json 2>/dev/null; then
+elif pkg_has_dep "vue"; then
   FRAMEWORK="vue"
   CURRENT_VERSION=$(get_pkg_version "vue")
   RELATED_DEPS=$(build_deps_json "vue" "vue-router" "pinia" "vuex" "vue-i18n" "typescript" "vite")
 
 # --- React (generic) ---
-elif [ -f "package.json" ] && grep -q "\"react\"" package.json 2>/dev/null; then
+elif pkg_has_dep "react"; then
   FRAMEWORK="react"
   CURRENT_VERSION=$(get_pkg_version "react")
   RELATED_DEPS=$(build_deps_json "react" "react-dom" "react-router" "react-router-dom" "typescript" "vite" "@vitejs/plugin-react")
 
-# --- Flutter ---
+# --- Flutter (not JSON — uses grep) ---
 elif [ -f "pubspec.yaml" ]; then
   FRAMEWORK="flutter"
-  CURRENT_VERSION=$(grep -E '^\s*sdk:\s*flutter' pubspec.yaml 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+  CURRENT_VERSION=$(grep -E '^\s*sdk:\s*flutter' pubspec.yaml 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   if [ -z "$CURRENT_VERSION" ] && command -v flutter &>/dev/null; then
     CURRENT_VERSION=$(flutter --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   fi
@@ -148,9 +180,10 @@ elif [ -f "pubspec.yaml" ]; then
   if command -v dart &>/dev/null; then
     DART_VERSION=$(dart --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   fi
-  RELATED_DEPS="{\"flutter\": \"$CURRENT_VERSION\", \"dart\": \"$DART_VERSION\"}"
+  RELATED_DEPS=$(jq -nc --arg flutter "$CURRENT_VERSION" --arg dart "$DART_VERSION" \
+    '{flutter: $flutter, dart: $dart}')
 
-# --- Django ---
+# --- Django (not JSON — uses grep) ---
 elif [ -f "manage.py" ]; then
   FRAMEWORK="django"
   if [ -f "requirements.txt" ]; then
@@ -162,9 +195,10 @@ elif [ -f "manage.py" ]; then
   if command -v python3 &>/dev/null; then
     PYTHON_VERSION=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
   fi
-  RELATED_DEPS="{\"django\": \"$CURRENT_VERSION\", \"python\": \"$PYTHON_VERSION\"}"
+  RELATED_DEPS=$(jq -nc --arg django "$CURRENT_VERSION" --arg python "$PYTHON_VERSION" \
+    '{django: $django, python: $python}')
 
-# --- Rails ---
+# --- Rails (not JSON — uses grep) ---
 elif [ -f "Gemfile" ] && grep -q "rails" Gemfile 2>/dev/null; then
   FRAMEWORK="rails"
   CURRENT_VERSION=$(grep -E "gem ['\"]rails['\"]" Gemfile 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
@@ -175,30 +209,41 @@ elif [ -f "Gemfile" ] && grep -q "rails" Gemfile 2>/dev/null; then
   if command -v ruby &>/dev/null; then
     RUBY_VERSION=$(ruby --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
   fi
-  RELATED_DEPS="{\"rails\": \"$CURRENT_VERSION\", \"ruby\": \"$RUBY_VERSION\"}"
+  RELATED_DEPS=$(jq -nc --arg rails "$CURRENT_VERSION" --arg ruby "$RUBY_VERSION" \
+    '{rails: $rails, ruby: $ruby}')
 
 # --- Express ---
-elif [ -f "package.json" ] && grep -q "\"express\"" package.json 2>/dev/null; then
+elif pkg_has_dep "express"; then
   FRAMEWORK="express"
   CURRENT_VERSION=$(get_pkg_version "express")
   RELATED_DEPS=$(build_deps_json "express" "typescript" "cors" "helmet" "morgan")
 fi
 
-# --- Output JSON ---
-cat <<EOF
-{
-  "framework": "$FRAMEWORK",
-  "currentVersion": "$CURRENT_VERSION",
-  "latestVersion": "",
-  "relatedDeps": $RELATED_DEPS,
-  "nodeVersion": "$NODE_VERSION",
-  "packageManager": "$PACKAGE_MANAGER",
-  "hasTests": $HAS_TESTS,
-  "hasCi": $HAS_CI,
-  "projectSize": {
-    "files": $PROJECT_SIZE_FILES,
-    "components": $PROJECT_SIZE_COMPONENTS,
-    "services": $PROJECT_SIZE_SERVICES
-  }
-}
-EOF
+# --- Output JSON using jq for safe encoding ---
+jq -n \
+  --arg framework "$FRAMEWORK" \
+  --arg currentVersion "$CURRENT_VERSION" \
+  --arg latestVersion "" \
+  --argjson relatedDeps "$RELATED_DEPS" \
+  --arg nodeVersion "$NODE_VERSION" \
+  --arg packageManager "$PACKAGE_MANAGER" \
+  --argjson hasTests "$HAS_TESTS" \
+  --argjson hasCi "$HAS_CI" \
+  --argjson files "$PROJECT_SIZE_FILES" \
+  --argjson components "$PROJECT_SIZE_COMPONENTS" \
+  --argjson services "$PROJECT_SIZE_SERVICES" \
+  '{
+    framework: $framework,
+    currentVersion: $currentVersion,
+    latestVersion: $latestVersion,
+    relatedDeps: $relatedDeps,
+    nodeVersion: $nodeVersion,
+    packageManager: $packageManager,
+    hasTests: $hasTests,
+    hasCi: $hasCi,
+    projectSize: {
+      files: $files,
+      components: $components,
+      services: $services
+    }
+  }'
