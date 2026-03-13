@@ -1,0 +1,11 @@
+{
+  "name": "no-version-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "*",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "typescript": "~5.4.0"
+  }
+}

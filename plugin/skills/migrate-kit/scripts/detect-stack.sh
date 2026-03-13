@@ -76,8 +76,9 @@ get_pkg_version() {
   raw=$(echo "$PKG_JSON" | jq -r --arg p "$pkg" '
     (.dependencies[$p] // .devDependencies[$p] // .peerDependencies[$p]) // empty
   ' 2>/dev/null) || return 0
-  # Strip version range prefixes: ^, ~, >=, >, <=, <, =
-  echo "$raw" | sed -E 's/^[~^><=]+//'
+  # Extract first semver-like version from any range expression:
+  # ^18.2.0, ~18.1.0, >=18.0.0 <19.0.0, ^18.0.0 || ^19.0.0, workspace:*, *, latest
+  echo "$raw" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 || true
 }
 
 # --- Helper: build related deps JSON from package.json ---
@@ -116,7 +117,7 @@ if [ "$PKG_JSON_VALID" = "true" ]; then
   PROJECT_SIZE_FILES=$(find . \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.vue" -o -name "*.svelte" \) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/dist/*" 2>/dev/null | wc -l | tr -d ' ')
   PROJECT_SIZE_COMPONENTS=$(find . \( -name "*.component.ts" -o -name "*.tsx" -o -name "*.vue" -o -name "*.svelte" \) -not -path "*/node_modules/*" -not -path "*/.next/*" -not -path "*/dist/*" -not -name "*.test.*" -not -name "*.spec.*" -not -name "*.stories.*" 2>/dev/null | wc -l | tr -d ' ')
   PROJECT_SIZE_SERVICES=$(find . \( -name "*.service.ts" -o -name "*.service.js" \) -not -path "*/node_modules/*" 2>/dev/null | wc -l | tr -d ' ')
-elif [ -f "pubspec.yaml" ]; then
+elif [ -f "pubspec.yaml" ] && [ -d "lib" ]; then
   PROJECT_SIZE_FILES=$(find lib -name "*.dart" 2>/dev/null | wc -l | tr -d ' ')
   PROJECT_SIZE_COMPONENTS=$(find lib -name "*.dart" -not -name "*_test.dart" 2>/dev/null | wc -l | tr -d ' ')
 elif [ -f "manage.py" ]; then
@@ -190,6 +191,8 @@ elif [ -f "manage.py" ]; then
     CURRENT_VERSION=$(grep -iE '^django[=>~]' requirements.txt 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
   elif [ -f "Pipfile" ]; then
     CURRENT_VERSION=$(grep -A1 'django' Pipfile 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+  elif [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$(grep -iE '^\s*django\s*=' pyproject.toml 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
   fi
   PYTHON_VERSION=""
   if command -v python3 &>/dev/null; then

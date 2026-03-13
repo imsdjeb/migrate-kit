@@ -1,0 +1,14 @@
+{
+  "name": "yarn-berry-react",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.5.0",
+    "@types/react": "^19.0.0"
+  }
+}

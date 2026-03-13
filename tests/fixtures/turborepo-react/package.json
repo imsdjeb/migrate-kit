@@ -1,0 +1,14 @@
+{
+  "name": "turborepo-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "~5.4.0"
+  }
+}
