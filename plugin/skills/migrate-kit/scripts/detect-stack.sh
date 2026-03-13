@@ -175,11 +175,11 @@ elif [ -f "pubspec.yaml" ]; then
   FRAMEWORK="flutter"
   CURRENT_VERSION=$(grep -E '^\s*sdk:\s*flutter' pubspec.yaml 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   if [ -z "$CURRENT_VERSION" ] && command -v flutter &>/dev/null; then
-    CURRENT_VERSION=$(flutter --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    CURRENT_VERSION=$(flutter --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   fi
   DART_VERSION=""
   if command -v dart &>/dev/null; then
-    DART_VERSION=$(dart --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    DART_VERSION=$(dart --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   fi
   RELATED_DEPS=$(jq -nc --arg flutter "$CURRENT_VERSION" --arg dart "$DART_VERSION" \
     '{flutter: $flutter, dart: $dart}')
@@ -196,21 +196,21 @@ elif [ -f "manage.py" ]; then
   fi
   PYTHON_VERSION=""
   if command -v python3 &>/dev/null; then
-    PYTHON_VERSION=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    PYTHON_VERSION=$(python3 --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
   fi
   RELATED_DEPS=$(jq -nc --arg django "$CURRENT_VERSION" --arg python "$PYTHON_VERSION" \
     '{django: $django, python: $python}')
 
 # --- Rails (not JSON — uses grep) ---
-elif [ -f "Gemfile" ] && grep -q "rails" Gemfile 2>/dev/null; then
+elif [ -f "Gemfile" ] && grep -qE "gem ['\"]rails['\"]" Gemfile 2>/dev/null; then
   FRAMEWORK="rails"
   CURRENT_VERSION=$(grep -E "gem ['\"]rails['\"]" Gemfile 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
   if [ -z "$CURRENT_VERSION" ] && [ -f "Gemfile.lock" ]; then
-    CURRENT_VERSION=$(grep -A1 "rails (" Gemfile.lock 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    CURRENT_VERSION=$(grep -A1 "rails (" Gemfile.lock 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   fi
   RUBY_VERSION=""
   if command -v ruby &>/dev/null; then
-    RUBY_VERSION=$(ruby --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    RUBY_VERSION=$(ruby --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
   fi
   RELATED_DEPS=$(jq -nc --arg rails "$CURRENT_VERSION" --arg ruby "$RUBY_VERSION" \
     '{rails: $rails, ruby: $ruby}')
