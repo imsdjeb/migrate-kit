@@ -56,12 +56,12 @@ claude plugin install migrate-kit@imsdjeb-migrate-kit
 
 | Framework | Versions | Key Migrations |
 |-----------|----------|---------------|
-| Angular | 14 → 19 | Standalone, Signals, Control Flow, Zoneless |
-| React | 16 → 19 | Hooks, createRoot, Compiler, Server Components |
+| Angular | 14 → 21 | Standalone, Signals, Control Flow, Zoneless, Vitest |
+| React | 16 → 19.2 | Hooks, createRoot, Compiler, Server Components |
 | Vue | 2 → 3.5 | Composition API, Pinia, script setup |
-| Next.js | 12 → 15 | App Router, Server Components, Async APIs |
-| Flutter | 3.x + Dart 2→3 | Null Safety, Material 3, Impeller |
-| Django | 3.2 → 5.1 | Async views, STORAGES, db_default |
+| Next.js | 12 → 16 | App Router, Server Components, Turbopack, Proxy |
+| Flutter | 3.x → 3.41 + Dart 2→3 | Null Safety, Material 3, Impeller, UIScene |
+| Django | 3.2 → 6.0 | Async views, Tasks framework, CSP, template partials |
 | Svelte | 3 → 5 | Runes, SvelteKit |
 | NestJS | 8 → 10 | Module changes |
 

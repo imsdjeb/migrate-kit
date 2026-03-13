@@ -106,6 +106,74 @@
 
 ---
 
+## Django 5.1 → 5.2 (LTS)
+
+### Breaking Changes
+- Long-term support release — will receive security updates for 3+ years.
+- Minor API cleanups and deprecation removals from 5.0 cycle.
+- Improved async ORM support continues.
+
+---
+
+## Django 5.2 → 6.0
+
+### Breaking Changes
+- **Minimum Python: 3.12** (dropped 3.10, 3.11).
+- **First-class async support** — Async views no longer need `sync_to_async()` boilerplate:
+  ```python
+  # Before (Django 5.x)
+  from asgiref.sync import sync_to_async
+
+  async def my_view(request):
+      users = await sync_to_async(list)(User.objects.all())
+
+  # After (Django 6.0)
+  async def my_view(request):
+      users = await User.objects.all().alist()  # native async ORM
+  ```
+- **Built-in Tasks framework** — Background task processing without Celery for simple cases:
+  ```python
+  from django.tasks import task
+
+  @task()
+  def send_welcome_email(user_id):
+      user = User.objects.get(id=user_id)
+      # send email...
+
+  # Enqueue
+  send_welcome_email.enqueue(user.id)
+  ```
+- **Template partials** — Reusable template fragments:
+  ```html
+  {% partialdef "user_card" %}
+    <div class="card">{{ user.name }}</div>
+  {% endpartialdef %}
+
+  {% partial "user_card" %}
+  ```
+- **Native Content Security Policy (CSP)** support.
+- **Email API modernization** — Uses Python's modern `email.message.EmailMessage` API.
+- **`DEFAULT_AUTO_FIELD`** — Default actually changes to `BigAutoField` (was just a warning before).
+- **Database API** — `return_insert_columns` renamed to `returning_columns`.
+- **`forms.URLField`** — Default scheme changed from `http` to `https`. `FORMS_URLFIELD_ASSUME_HTTPS` setting removed.
+- **`DjangoDivFormRenderer`** and `Jinja2DivFormRenderer` removed.
+- **`BaseConstraint`** — Positional arguments no longer accepted.
+
+### Codemods
+```bash
+pip install Django==6.0.3
+python manage.py check --deploy  # verify production readiness
+python manage.py migrate          # run migrations
+```
+
+### Gotchas
+- Python 3.12+ requirement is the biggest blocker — check your deployment environment
+- The Tasks framework is basic — for complex workflows, keep Celery
+- Template partials are template-level only, not reusable across files (use `{% include %}` for that)
+- Test your email sending — the new email API may surface previously hidden encoding issues
+
+---
+
 ## Flask Upgrades
 
 ### Flask 2.x → 3.x

@@ -129,6 +129,55 @@ npx @next/codemod@latest upgrade 15
 
 ---
 
+## Next.js 15 → 16
+
+### Breaking Changes
+- **Async Request APIs fully enforced** — Synchronous access to `cookies()`, `headers()`, `params`, `searchParams` is completely removed (was deprecated in v15, now errors). Every usage must be `await`-ed.
+- **Turbopack is the default bundler** — Webpack is no longer the default. If you have custom Webpack config in `next.config.js`, Turbopack will **ignore it entirely**. You must either:
+  - Migrate webpack config to Turbopack equivalents
+  - Or explicitly opt out: `next dev --bundler webpack`
+- **Middleware renamed to Proxy** — The `middleware.ts` file is deprecated. Rename to `proxy.ts` and the `middleware` export to `proxy`:
+  ```typescript
+  // Before (v15): middleware.ts
+  export function middleware(request: NextRequest) { ... }
+
+  // After (v16): proxy.ts
+  export function proxy(request: NextRequest) { ... }
+  ```
+- **Caching is fully opt-in** — All dynamic code executes at request time by default. Use Cache Components for explicit caching:
+  ```tsx
+  import { cache } from 'react';
+  const getData = cache(async () => {
+    return await db.query('...');
+  });
+  ```
+- **`next/image` improvements** — No longer requires `width` and `height` for remote images. Better defaults.
+- **Parallel Routes** — All slots now require explicit `default.js` files.
+- **Removed features:**
+  - AMP support (fully removed)
+  - `next lint` command (use ESLint directly)
+  - Runtime configs (use `.env` files instead)
+- **Node.js 18 dropped** — Minimum Node.js 20.9+.
+
+### Codemods
+```bash
+npx @next/codemod@canary upgrade latest
+```
+
+### Deps to Update
+- Node.js: 20.9+ (18 dropped)
+- `react`: 19.x
+- `eslint-config-next`: 16.x
+- TypeScript: 5.1.0+
+
+### Gotchas
+- Turbopack as default is the most disruptive change — audit any custom webpack config
+- The middleware→proxy rename affects every project with middleware
+- If you relied on implicit caching from v14, v16 makes the explicit-only model from v15 even stricter
+- Check all parallel route directories for `default.js` files
+
+---
+
 ## Pages Router → App Router Migration
 
 This is a gradual migration. Both routers work simultaneously.

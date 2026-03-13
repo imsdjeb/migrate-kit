@@ -203,3 +203,85 @@ ng update @angular/core@19 @angular/cli@19
 - `@ngrx/store` users: check compatibility with signal-based state
 - Zone.js is now optional — test thoroughly if removing it
 - Material components may have subtle styling changes between 18 and 19
+
+---
+
+## Angular 19 → 20
+
+### Breaking Changes
+- **Build system change** — Default build package changes from `@angular-devkit/build-angular` to `@angular/build`, which does NOT include Karma.
+- **Karma deprecated** — `ng test` will fail out of the box. Migrate to Web Test Runner or Vitest:
+  ```bash
+  ng update @angular/cli@20 --migrate-only
+  # Follow prompts to switch test runner
+  ```
+- **Structural directives deprecated** — `*ngIf`, `*ngFor`, `*ngSwitch` are officially deprecated (still work, but warnings). Migrate to `@if`, `@for`, `@switch`:
+  ```bash
+  ng generate @angular/core:control-flow
+  ```
+- **Self-closing tags auto-migration** — `<app-comp></app-comp>` → `<app-comp />` via schematic.
+- **`InjectFlags` API removed** — Migration schematic available.
+- **Standalone by default** — `ng generate component` creates standalone components. Use `--standalone=false` for NgModule-based.
+- **Node.js 18 dropped** — Requires Node.js 20+.
+- **TypeScript 5.8** required.
+- **Opera browser** no longer officially supported in `browserslist`.
+
+### Codemods
+```bash
+ng update @angular/core@20 @angular/cli@20
+ng generate @angular/core:control-flow  # migrate structural directives
+```
+
+### Deps to Update
+- TypeScript: 5.5.x → 5.8.x
+- Node.js: 20+ (18 dropped)
+- Karma → Vitest or Web Test Runner
+
+---
+
+## Angular 20 → 21
+
+### Breaking Changes
+- **Zoneless change detection is now the default** — New applications use zoneless change detection automatically. Zone.js is no longer included by default:
+  ```typescript
+  // If your app still needs Zone.js, explicitly add it:
+  bootstrapApplication(AppComponent, {
+    providers: [provideZoneChangeDetection()]
+  });
+
+  // New default (zoneless):
+  bootstrapApplication(AppComponent, {
+    providers: [provideExperimentalZonelessChangeDetection()]
+  });
+  ```
+  This is the biggest breaking change — if your app relies on Zone.js side effects (auto change detection on setTimeout, Promise, HTTP calls), you need to either add Zone.js explicitly or migrate to signals.
+- **Vitest replaces Karma as default test runner** — Vitest is now stable and the default. Web Test Runner and Jest support planned for removal in v22.
+- **`HttpClient` auto-injection** — `HttpClient` is now injected by default in the root injector. No need for `provideHttpClient()` in most cases.
+- **`SimpleChanges` generic type** — `SimpleChanges` is now generic, allowing typed `@Input()` change tracking:
+  ```typescript
+  ngOnChanges(changes: SimpleChanges<MyComponent>) {
+    // changes.myInput is now typed
+  }
+  ```
+- **Signal Forms (experimental)** — New reactive forms API based on signals. API may change before stable.
+
+### New Features (non-breaking)
+- **Angular Aria** — New UI library for accessible interfaces (alongside Material and CDK).
+- **MCP integration** — Official Model Context Protocol support for tooling.
+
+### Codemods
+```bash
+ng update @angular/core@21 @angular/cli@21
+```
+
+### Deps to Update
+- TypeScript: 5.8.x → 5.9.x+
+- Node.js: 20+
+- Zone.js: now optional (remove from polyfills if going zoneless)
+- Vitest: included by default for testing
+
+### Gotchas
+- The zoneless default is the biggest migration hurdle — test EVERYTHING after removing Zone.js
+- If using `@ngrx/store` or other RxJS-heavy state management, verify compatibility with zoneless
+- Signal Forms are experimental — don't migrate production forms yet
+- If you were on Web Test Runner (from v20 migration), plan to move to Vitest before v22
