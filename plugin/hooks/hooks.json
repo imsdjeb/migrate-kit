@@ -1,16 +1,15 @@
 {
-  "hooks": [
-    {
-      "event": "PostToolUse",
-      "matcher": {
-        "tool_name": "Write|Edit"
-      },
-      "hooks": [
-        {
-          "type": "command",
-          "command": "file=\"$TOOL_INPUT_FILE_PATH\"; basename_f=$(basename \"$file\"); if echo \"$basename_f\" | grep -qE '^(package\\.json|pubspec\\.yaml|requirements\\.txt|Gemfile|go\\.mod|Cargo\\.toml)$'; then echo \"⚠️  Framework dependency file modified: $basename_f\"; echo \"💡 Consider running /migrate-kit:verify to check compatibility.\"; fi"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=\"$TOOL_INPUT_FILE_PATH\"; basename_f=$(basename \"$file\"); if echo \"$basename_f\" | grep -qE '^(package\\.json|pubspec\\.yaml|requirements\\.txt|Gemfile|go\\.mod|Cargo\\.toml)$'; then echo \"Framework dependency file modified: $basename_f\"; echo \"Consider running /migrate-kit:verify to check compatibility.\"; fi"
+          }
+        ]
+      }
+    ]
+  }
 }
